@@ -1,0 +1,271 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{multicol}
+\usepackage{enumerate}
+\usepackage{graphicx}
+\usepackage{spalign}
+\usepackage{hyperref}
+\setlength{\parindent}{0pt}
+\usepackage{listings} 
+\usepackage{mdframed}
+\usepackage{systeme}
+\usepackage{amsmath}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage{amssymb}
+\usepackage{marginnote}
+\usepackage{float}
+\usepackage{subfig}
+\usepackage{enumerate}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{mathrsfs}
+\usepackage{dsfont}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{pifont}
+\usepackage{colortbl}
+%\usepackage[table,xcdraw]{xcolor}
+
+
+
+
+%%	 MATLAB
+\usepackage[framed,numbered,autolinebreaks,useliterate]{mcode}
+
+\renewcommand{\theenumi}{\Alph{enumi}}
+\newcommand{\phanmin}{\phantom{-}}
+\renewcommand{\vec}[1]{\mathbf{#1}}
+
+\lstset{
+  columns=fullflexible,
+  keepspaces=true,
+  literate={delta}{{\text{delta}}}1
+}
+
+\title{Using PageRank to Model Phone Tag}
+\author{Nicholas Mankowski}
+\date{December 13, 2023}
+
+\begin{document}
+
+%\rule[2ex]{\textwidth}{2pt}
+\maketitle
+
+\section{Introduction}
+      Ed Sheeran has been feeling awfully lonely in his day-to-day life of writing and performing songs.  
+      He feels as though he needs the child-like wonder that comes only from a game of tag in order to cure this loneliness.
+      However, Ed has an awfully busy group of friends, so he cannot have them take time out of their busy schedules to meet him in order for a game of tag.
+      As a form of compromise, Ed has decided to schedule a game of phone tag.
+      This also gives the opportunity for the game to grow bigger, as Ed's friends can invite people he does not know.
+      \\
+
+      We can represent the players in this game of phone tag using the following directed graph.  
+      In the graph, an arrow directed towards an individual signifies that the person at the arrow's origin possesses the contact details of that individual.
+      \begin{figure}[H]
+        \centering
+        \caption{Relations Between Celebrities}
+        \includegraphics*[width=0.8\columnwidth]{models/graph.png}
+        \label{relations-between-celebrities}
+      \end{figure}
+
+      In this game of phone tag, all celebrities have an assistant with the contact information of all other celebrities in the game.
+      So, there is a small likelihood that the person who is deemed ``it" is too busy to play the game, so their assistant will decide who is it.
+      However, since the assistant has the contact information of everyone, the next person to be selected is not limited to who the current player has contact information of.
+      \\
+
+      It is worth noting that Ed Sheeran is an awfully competitive person.  
+      So, he wants to be able to predict his odds are of being ``it" after a long, undetermined amount of time.
+      In this paper, we will use the technique of PageRank in order to analyze the results of this game of phone tag using the graph given above.
+
+    \section{Description of Mathematics}
+      \subsection{Forming our Google Matrix}
+      In order to perform our analysis on the graph displayed in \ref{relations-between-celebrities}, we must form an adjacency matrix indicating relationships between edges.
+      We will assemble our adjacency matrix with the following constraints$:$
+      \begin{itemize}
+        \item All celebrities are given a unique index value $1$ through $16$.
+        \item $A_{ij} = 1$ indicates that the celebrity with index $i$ has the contact information of the celebrity with index $j$.
+        \item $A_{ij} = 0$ indicates that the celebrity with index $i$ does not have the contact information of the celebrity with index $j$.
+        \item $A_{ii} = 0$ for all $i$.
+      \end{itemize}
+
+      If we have our data organized in a 2 dimensional vector called \texttt{connections}, we can form our adjacency matrix as follows:
+      \begin{lstlisting}
+% Initialize an empty adjacency matrix
+n = 16;
+adjMatrix = zeros(n, n);
+
+% Populate the adjacency matrix
+for i = 1:length(connections)
+    adjMatrix(i, connections{i}) = 1;
+end
+      \end{lstlisting}
+      
+      \textbf{Note:} \texttt{connections(i)} is assumed to hold a list of celebrities whose contact information is available to celebrity $i$.
+      \\
+      
+      \label{create-transition-matrix}
+      Furthermore, we can make the assumption that each celebrity has an equal likelihood to call each of their contacts in the game.
+      Thus, we can modify our adjacency matrix so that each element $A_{ij}$ now represents the probability that the celebrity with index $i$ will call the celebrity with index $j$.
+      We can perform this change as well as calculate the transpose of our matrix in order to produce the transition matrix for this particular graph.
+      We can create our transtion matrix T as follows:
+\begin{lstlisting}
+% Get our transition matrix
+T = zeros(n, n);
+for i = 1:length(adjMatrix)
+    T(i, :) = adjMatrix(i, :) / sum(adjMatrix(i, :));
+end
+T = transpose(T);
+\end{lstlisting}
+      
+      \label{create-google-matrix}
+      Now that we have our transition matrix, we are able to form our Google matrix.
+      Since all of our celebrities have assistants who have the contact information of everybody in the game, we must account that there is a small likelihood that they could call another celebrity in the game.
+      This assumption has the effect of loosely coupling all elements of our graph.  This allows us to ensure that there is no possibility of errors resulting in dead ends or disconnected components of our graph.
+      We can create our Google matrix $M$ that accounts for this as follows:
+      \begin{gather}
+        M = (1 - p) T + p B, \quad \text{where } B = \frac{1}{n}
+        \begin{bmatrix}
+        1 & 1 & \cdots & 1 \\
+        \vdots & \vdots & \ddots & \vdots \\
+        1 & 1 & \cdots & 1
+        \end{bmatrix}
+      \end{gather}
+      where $p$ is some damping factor (typically around $0.15$).
+      This damping factor is representative of the chance that the assistant of the ``it" celebrity will be the one making the phone call.
+      For example, if $p = 0.15$, then there is a $15\%$ chance that the assistant will make the call.
+      We are able to create our Google matrix in MATLAB as follows:
+\begin{lstlisting}
+% Get the Google matrix
+M = (1 - p) * T + (p / n) * ones(n, n);
+\end{lstlisting}
+
+      \subsection{Calculating PageRank}
+      Now that we have our Google matrix $M$, we are able to calculate the PageRank and look at probabilistic outcomes of our game of phone tag.
+      In order to do this, we must first produce a vector of initial possibilities.  
+      This vector, $\overrightarrow{v}$, will be a $1$x$n$ matrix where each element is equal to $\frac{1}{n}$.
+      That is, 
+      \[
+        \overrightarrow{v} = \frac{1}{n}
+        \begin{bmatrix}
+          1 \\
+          1 \\
+          \vdots \\
+          1
+        \end{bmatrix}.
+      \]
+      This is representative of the fact that each celebrity has an equal probability of being the first person to be ``it" in the game of phone tag.
+      We are able to build this $\overrightarrow{v}$ vector in code as follows:
+\begin{lstlisting}
+% Get our initial vector
+v = (1 / n) * ones(16, 1);
+\end{lstlisting}
+      Now that we have our initial vector $\overrightarrow{v}$, we can observe that since $M$ is a regular, stochastic matrix, we can apply the Power Method Convergence Theorem to observe that the sequence $ \{ M\overrightarrow{v}, M^2\overrightarrow{v}, M^3\overrightarrow{v}, \dots\}$ will converge to a steady state vector $\overrightarrow{v}^{\star}$.
+      Thus, we can computationally solve for our steady state vector in MATLAB as follows:
+\begin{lstlisting}
+% Calculate PageRank
+prev_ratings = M * v;
+% Iterate until we have approached the steady state vector
+for i = 1:999 % Cut off at 999 in case we don't converge
+    % Get the next ratings
+    ratings = M * prev_ratings;
+
+    % Check if the ratings have converged to steady state vector
+    is_equal = true;
+    for j = 1:n
+        if abs(ratings(j) - prev_ratings(j)) > 0.001
+            is_equal = false;
+        end
+    end
+
+    % If the ratings have converged, break out of the loop
+    if is_equal
+        break;
+    end
+
+    % Otherwise, continue
+    prev_ratings = ratings;
+end
+\end{lstlisting}
+      Now that we have our steady state vector, we can sort and display the results of our PageRank.
+      We can do this in MATLAB by using the \texttt{sort} function.  
+      We can do this as follows:
+\begin{lstlisting}
+% Display the sorted results of PageRank
+[sorted_ratings, sorted_indices] = sort(ratings, 'descend');
+for i = 1:n
+    fprintf('%s: %f\n', labels(sorted_indices(i)), sorted_ratings(i));
+end
+\end{lstlisting}
+      \textbf{Note:} This assumes you have declared a list of celebrity names called \texttt{labels}, where \texttt{labels(i)} is the name of the celebrity with index $i$.
+      \\
+
+      Observing the output from the console, we can see the following results:
+      \label{pagerank-results}
+      \begin{table}[H]
+        \centering
+        \begin{tabular}{|l|l|l|}
+          \hline
+          \rowcolor[HTML]{C0C0C0} 
+          Ranking & Celebrity & Rating\\ \hline
+          1 & Beyoncé &  0.155709 \\ \hline
+          2 & Kim Kardashian &  0.137929 \\ \hline
+          3 & Taylor Swift &  0.085853 \\ \hline
+          4 & Jay-Z &  0.084664 \\ \hline
+          5 & Justin Bieber &  0.077819 \\ \hline
+          6 & Ariana Grande &  0.068568 \\ \hline
+          7 & Kylie Jenner &  0.068050 \\ \hline
+          8 & Selena Gomez &  0.068018 \\ \hline
+          9 & Ed Sheeran &  0.044216 \\ \hline
+          10 & Kendall Jenner &  0.035700 \\ \hline
+          11 & Dwayne Johnson &  0.035048 \\ \hline
+          12 & Kevin Hart &  0.032981 \\ \hline
+          13 & Ellen DeGeneres &  0.032136 \\ \hline
+          14 & Oprah Winfrey &  0.030741 \\ \hline
+          15 & LeBron James &  0.024466 \\ \hline
+          16 & Michelle Obama &  0.018101 \\ \hline
+        \end{tabular}
+      \end{table}
+      \textbf{Note:} This model was generated with a damping factor of $p \, = \, 0.15$.
+    
+    \section{Conclusion}
+      \subsection{Model Analysis}
+      Based on the results generated in \ref{pagerank-results}, we can come to the conclusion that Ed Sheeran has a low likelihood of being ``it" after a long time of playing phone tag. 
+      This is due to the fact that he has ranked 9th according to the results of our PageRank analysis, with a $4.4216 \% $ chance of being ``it" when we use a damping factor of $p \, = \, 0.15$.
+      However, Ed Sheeran's rating and ranking could be changed if the damping factor was modified.
+      This is because the way that our model is structured, an increase in damping factor will indicate that a celebrity's assistant is more likely to call a random celebrity.  
+      This has the effect of putting less emphasis on the relationships defined in our graph shown in \ref{relations-between-celebrities}.
+      Thus, since Ed Sheeran is fairly well connected in our graph, he is likely to have a lower ranking if we were to put more emphasis on the random traversal implied by a high $p$ value.
+      We can confirm this by regenerating our model with $p \, = \, 0.85$.  If we do this, we can observe that Ed Sheeran now ranks 14th.
+      However, the probability of him being ``it" at the end of the game is slightly higher, now at $5.7909\%$, with the larger $p$ value.
+      This is because increasing the $p$ value has the effect of evening out the ratings generated by PageRank. 
+      \\
+
+      Conversely, we can observe that lowering the $p$ value will generally have the effect of decreasing the likelihood that Ed Sheeran is ``it" at the end of this game.
+      This is because by lowering the $p$ value, we are putting less emphasis on random traversal.
+      This means that the graph defined in \ref{relations-between-celebrities} plays a more important role in determining who is ``it" at the end of the game.
+      
+      \subsection{Areas of Further Study}
+      While the PageRank model used to predict the outcomes of a game of phone tag has advantages in simplicity, it certainly could improve in a few key areas.
+      For example, when creating our transition matrix in \ref{create-transition-matrix}, we assumed a uniform probability that each celebrity was equally likely to call each celebrity that they have the contact details for.
+      This is likely a massive oversimplification, as these probabilities could be dependent on a large number of variables.
+      For example, it is likely that Beyoncé is more likely to call Jay-Z than Kim Kardashian, so the weight from Beyoncé to Jay-Z should likely be higher than the weight from Beyoncé to Kim Kardashian in our transition matrix.
+      \\
+      
+      Similarly, we assumed a uniform distribution of probabilities in our $B$ matrix used while creating the Google matrix in \ref{create-google-matrix}.
+      If we had more information about the celebrity assistants, we could probably use better weights in our $B$ matrix and create a more accurate model.
+      Another thing that we could put more emphasis on choosing our damping factor $p$.
+      Rather than picking any $p$ value, we could put more consideration into the probability that an assistant would make the next call, or even use a function to get different $p$ values that are dependent on external factors.
+      \\
+      
+      Overall, by taking further consideration into these different techniques, we could likely greatly improve the efficacy of our model.
+
+      \subsection{Concluding Remarks}
+      Using PageRank to determine the likely results of a game of phone tag between celebrities does seem to be effective.
+      Despite a few areas that could be improved upon, this techique has proved valuable in our analysis.
+      This is because it gives us both a relative ranking and an objective probability that any one person is ``it" by the end of the game.
+      The simplicity of this model allows low computational overhead, and further consideration taken during certain steps of computation could certainly improve the outcome generated by this model.
+
+
+\end{document}
